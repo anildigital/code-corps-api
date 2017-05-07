@@ -41,7 +41,7 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
       test "with unmatched both users, creates users, creates missing tasks, missing comments, for all projects connected with the github repo" do
         %{
           "issue" => %{
-            "body" => issue_markdown, "title" => issue_title, "id" => issue_github_id, "state" => issue_state,
+            "body" => issue_markdown, "title" => issue_title, "number" => issue_number, "state" => issue_state,
             "user" => %{"id" => issue_user_github_id}
           },
           "comment" => %{
@@ -71,12 +71,13 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
         issue_user = Repo.get_by(User, github_id: issue_user_github_id)
 
         Repo.all(Task) |> Enum.each(fn task ->
-          assert task.github_id == issue_github_id
+          assert task.github_issue_number == issue_number
           assert task.markdown == issue_markdown
           assert task.project_id in project_ids
           assert task.status == issue_state
           assert task.title == issue_title
           assert task.user_id == issue_user.id
+          assert task.github_repo_id == github_repo.id
         end)
 
         comment_user = Repo.get_by(User, github_id: comment_user_github_id)
@@ -112,7 +113,7 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
       test "with matched issue user, unmatched comment user, creates and updates tasks, comments and comment user, for each related project" do
         %{
           "issue" => %{
-            "body" => issue_markdown, "title" => issue_title, "id" => issue_github_id, "state" => issue_state,
+            "body" => issue_markdown, "title" => issue_title, "number" => issue_number, "state" => issue_state,
             "user" => %{"id" => issue_user_github_id}
           },
           "comment" => %{
@@ -136,7 +137,7 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
         end)
 
         # there's a task for project 1
-        task_1 = insert(:task, project: project_1, user: issue_user, github_id: issue_github_id)
+        task_1 = insert(:task, project: project_1, user: issue_user, github_repo: github_repo, github_issue_number: issue_number)
 
         {:ok, comments} = IssueComment.handle(@event, @payload)
 
@@ -147,12 +148,13 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
         tasks = Repo.all(Task)
 
         tasks |> Enum.each(fn task ->
-          assert task.github_id == issue_github_id
+          assert task.github_issue_number == issue_number
           assert task.markdown == issue_markdown
           assert task.project_id in project_ids
           assert task.status == issue_state
           assert task.title == issue_title
           assert task.user_id == issue_user.id
+          assert task.github_repo_id == github_repo.id
         end)
 
         task_ids = tasks |> Enum.map(&Map.get(&1, :id))
@@ -194,7 +196,7 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
       test "with unmatched issue user, matched comment user, creates and updates tasks, comments and issue user, for each related project" do
         %{
           "issue" => %{
-            "body" => issue_markdown, "title" => issue_title, "id" => issue_github_id, "state" => issue_state,
+            "body" => issue_markdown, "title" => issue_title, "number" => issue_number, "state" => issue_state,
             "user" => %{"id" => issue_user_github_id}
           },
           "comment" => %{
@@ -226,12 +228,13 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
         issue_user = Repo.get_by(User, github_id: issue_user_github_id)
 
         Repo.all(Task) |> Enum.each(fn task ->
-          assert task.github_id == issue_github_id
+          assert task.github_issue_number == issue_number
           assert task.markdown == issue_markdown
           assert task.project_id in project_ids
           assert task.status == issue_state
           assert task.title == issue_title
           assert task.user_id == issue_user.id
+          assert task.github_repo_id == github_repo.id
         end)
 
         comments |> Enum.each(fn comment ->
@@ -268,7 +271,7 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
       test "with matched issue and comment user, creates and updates tasks, comments, for each related project" do
         %{
           "issue" => %{
-            "body" => issue_markdown, "title" => issue_title, "id" => issue_github_id, "state" => issue_state,
+            "body" => issue_markdown, "title" => issue_title, "number" => issue_number, "state" => issue_state,
             "user" => %{"id" => issue_user_github_id}
           },
           "comment" => %{
@@ -293,11 +296,11 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
         end)
 
         # there's a task and comment for project 1
-        task_1 = insert(:task, project: project_1, user: issue_user, github_id: issue_github_id)
+        task_1 = insert(:task, project: project_1, user: issue_user, github_repo: github_repo, github_issue_number: issue_number)
         comment_1 = insert(:comment, task: task_1, user: comment_user, github_id: comment_github_id)
 
         # there is only a task for project 2
-        task_2 = insert(:task, project: project_2, user: issue_user, github_id: issue_github_id)
+        task_2 = insert(:task, project: project_2, user: issue_user, github_repo: github_repo, github_issue_number: issue_number)
 
         {:ok, comments} = IssueComment.handle(@event, @payload)
 
@@ -308,12 +311,13 @@ defmodule CodeCorps.GitHub.Event.IssueCommentTest do
         tasks = Repo.all(Task)
 
         tasks |> Enum.each(fn task ->
-          assert task.github_id == issue_github_id
+          assert task.github_issue_number == issue_number
           assert task.markdown == issue_markdown
           assert task.project_id in project_ids
           assert task.status == issue_state
           assert task.title == issue_title
           assert task.user_id == issue_user.id
+          assert task.github_repo_id == github_repo.id
         end)
 
         task_ids = tasks |> Enum.map(&Map.get(&1, :id))

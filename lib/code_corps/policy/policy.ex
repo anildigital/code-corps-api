@@ -29,8 +29,10 @@ defmodule CodeCorps.Policy do
   defp can?(%User{} = user, :create, %Comment{}, %{} = params), do: Policy.Comment.create?(user, params)
   defp can?(%User{} = user, :update, %Comment{} = comment, %{}), do: Policy.Comment.update?(user, comment)
   defp can?(%User{} = user, :create, %Organization{}, %{}), do: Policy.Organization.create?(user)
-  defp can?(%User{} = user, :update, %Organization{} = organization, %{}), do: Policy.Organization.update?(user, organization)  
-  defp can?(%User{} = current_user, :update, %User{} = user, %{}), do: Policy.User.update?(user, current_user)
+  defp can?(%User{} = user, :update, %Organization{} = organization, %{}), do: Policy.Organization.update?(user, organization)
+  defp can?(%User{} = user, :create, %Task{}, %{} = params), do: Policy.Task.create?(user, params)
+  defp can?(%User{} = user, :update, %Task{} = task, %{}), do: Policy.Task.update?(user, task)
+  defp can?(%User{} = current_user, :update, %User{} = user, %{}), do: Policy.User.update?(current_user, user)
 
   defimpl Canada.Can, for: User do
     # NOTE: Canary sets an :unauthorized and a :not_found handler on a config level
@@ -40,7 +42,7 @@ defmodule CodeCorps.Policy do
     # will never do anything
     #
     # The only solution is to have a catch_all match for the resource being nil, which returns true
-    
+
     # NOTE: other tests are using the User policy for the time being.
     def can?(%User{}, _action, nil), do: true
 
@@ -97,9 +99,6 @@ defmodule CodeCorps.Policy do
 
     def can?(%User{} = user, :create, %Changeset{data: %StripePlatformCustomer{}} = changeset), do: Policy.StripePlatformCustomer.create?(user, changeset)
     def can?(%User{} = user, :show, %StripePlatformCustomer{} = stripe_platform_customer), do: Policy.StripePlatformCustomer.show?(user, stripe_platform_customer)
-
-    def can?(%User{} = user, :create, %Changeset{data: %Task{}} = changeset), do: Policy.Task.create?(user, changeset)
-    def can?(%User{} = user, :update, %Task{} = task), do: Policy.Task.update?(user, task)
 
     def can?(%User{} = user, :create, %Changeset{data: %TaskSkill{}} = changeset), do: Policy.TaskSkill.create?(user, changeset)
     def can?(%User{} = user, :delete, %TaskSkill{} = task_skill), do: Policy.TaskSkill.delete?(user, task_skill)
