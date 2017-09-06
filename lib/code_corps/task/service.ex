@@ -11,27 +11,28 @@ defmodule CodeCorps.Task.Service do
   """
   @spec create(map) :: {:ok, Task.t} | {:error, Changeset.t} | {:error, :github}
   def create(%{} = attributes) do
-    multi =
-      Multi.new
-      |> Multi.insert(:task, %Task{} |> Task.create_changeset(attributes))
-      |> Multi.run(:github, (fn %{task: %Task{} = task} -> task |> connect_to_github end))
-
-    case multi |> Repo.transaction do
-      # everything went great
-      {:ok, %{github: %Task{} = task}} -> {:ok, task}
-      # validation error on initial task insertion
-      {:error, :task, %Changeset{} = changeset, _steps} -> {:error, changeset}
-      # github API request error
-      {:error, :github, _value, _steps} -> {:error, :github}
-    end
+    Multi.new
+    |> Multi.insert(:task, %Task{} |> Task.create_changeset(attributes))
+    |> Multi.run(:github, (fn %{task: %Task{} = task} -> task |> connect_to_github() end))
+    |> Repo.transaction
+    |> marshall_result()
   end
 
-  @spec update(Task.t, map) :: {:ok, Task.t} | {:error, Changeset.t}
+  @spec update(Task.t, map) :: {:ok, Task.t} | {:error, Changeset.t} | {:error, :github}
   def update(%Task{} = task, %{} = attributes) do
-    task |> Task.update_changeset(attributes) |> Repo.update
+    Multi.new
+    |> Multi.update(:task, task |> Task.update_changeset(attributes))
+    |> Multi.run(:github, (fn %{task: %Task{} = task} -> task |> sync_to_github() end))
+    |> Repo.transaction
+    |> marshall_result()
   end
 
-  @spec connect_to_github(Task.t) :: {:ok, Task.t} :: {:error, any}
+  @spec marshall_result(tuple) :: {:ok, Task.t} | {:error, Changeset.t} | {:error, :github}
+  defp marshall_result({:ok, %{github: %Task{} = task}}), do: {:ok, task}
+  defp marshall_result({:error, :task, %Changeset{} = changeset, _steps}), do: {:error, changeset}
+  defp marshall_result({:error, :github, _value, _steps}), do: {:error, :github}
+
+  @spec connect_to_github(Task.t) :: {:ok, Task.t} :: {:error, GitHub.api_error_struct}
   defp connect_to_github(%Task{github_repo_id: nil} = task), do: {:ok, task}
   defp connect_to_github(%Task{github_repo_id: _} = task) do
     with {:ok, issue} <- task |> Repo.preload([:github_repo, :user]) |> GitHub.Issue.create do
@@ -44,5 +45,15 @@ defmodule CodeCorps.Task.Service do
   @spec link_with_github_changeset(Task.t, map) :: Changeset.t
   defp link_with_github_changeset(%Task{} = task, %{"number" => number}) do
     task |> Changeset.change(%{github_issue_number: number})
+  end
+
+  @spec sync_to_github(Task.t) :: {:ok, Task.t} :: {:error, GitHub.api_error_struct}
+  defp sync_to_github(%Task{github_repo_id: nil} = task), do: {:ok, task}
+  defp sync_to_github(%Task{github_repo_id: _} = task) do
+    with {:ok, _issue} <- task |> Repo.preload([:github_repo, :user]) |> GitHub.Issue.update do
+      {:ok, task}
+    else
+      {:error, github_error} -> {:error, github_error}
+    end
   end
 end

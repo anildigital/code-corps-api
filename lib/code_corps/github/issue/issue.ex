@@ -8,14 +8,27 @@ defmodule CodeCorps.GitHub.Issue do
     user: %User{} = user
     } = task) do
 
-    endpoint = github_repo |> get_endpoint()
+    endpoint = github_repo |> get_repo_endpoint()
     attrs = task |> GitHub.Adapters.Task.to_issue
 
     make_request(user, :post, endpoint, attrs)
   end
 
-  @spec get_endpoint(GithubRepo.r) :: String.t
-  defp get_endpoint(%GithubRepo{github_account_login: owner, name: repo}) do
+  @spec update(Task.t) :: GitHub.response
+  def update(%Task{
+    github_repo: %GithubRepo{} = github_repo,
+    user: %User{} = user,
+    github_issue_number: number
+    } = task) do
+
+    endpoint = "#{github_repo |> get_repo_endpoint()}/#{number}"
+    attrs = task |> GitHub.Adapters.Task.to_issue
+
+    make_request(user, :patch, endpoint, attrs)
+  end
+
+  @spec get_repo_endpoint(GithubRepo.t) :: String.t
+  defp get_repo_endpoint(%GithubRepo{github_account_login: owner, name: repo}) do
     "/repos/#{owner}/#{repo}/issues"
   end
 

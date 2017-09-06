@@ -89,4 +89,73 @@ defmodule CodeCorps.Task.ServiceTest do
       assert_received({:post, "https://api.github.com/repos/foo/bar/issues", _headers, _body, _options})
     end
   end
+
+  describe "update/2" do
+    @update_attrs %{"title" => "foo", "markdown" => "bar", "status" => "closed"}
+
+    test "updates task" do
+      task = insert(:task)
+      {:ok, updated_task} = task |> Task.Service.update(@update_attrs)
+
+      assert updated_task.id == task.id
+      assert updated_task.title == @update_attrs["title"]
+      assert updated_task.markdown == @update_attrs["markdown"]
+      assert updated_task.body != task.body
+      refute task.github_issue_number
+      refute task.github_repo_id
+
+      refute_received({:post, _string, {}, "{}", []})
+    end
+
+    test "returns {:error, changeset} if there are validation errors" do
+      task = insert(:task)
+      {:error, changeset} = task |> Task.Service.update(%{"title" => nil})
+
+      refute changeset.valid?
+
+      refute_received({:post, _string, {}, "{}", []})
+    end
+
+    test "propagates changes to github if task is synced to github issue" do
+      github_repo =
+        :github_repo
+        |> insert(github_account_login: "foo", name: "bar")
+
+      task = insert(:task, github_repo: github_repo, github_issue_number: 5)
+
+      {:ok, updated_task} = task |> Task.Service.update(@update_attrs)
+
+      assert updated_task.id == task.id
+      assert updated_task.title == @update_attrs["title"]
+      assert updated_task.markdown == @update_attrs["markdown"]
+      assert updated_task.body != task.body
+      assert updated_task.github_issue_number
+      assert updated_task.github_repo_id
+
+      assert_received({:patch, "https://api.github.com/repos/foo/bar/issues/5", _headers, _body, _options})
+    end
+
+    test "reports {:error, :github}, makes no changes at all if there is a github api error" do
+      github_repo =
+        :github_repo
+        |> insert(github_account_login: "foo", name: "bar")
+
+      task = insert(:task, github_repo: github_repo, github_issue_number: 5)
+
+      with_mock_api(CodeCorps.GitHub.FailureAPI) do
+        assert {:error, :github} == task |> Task.Service.update(@update_attrs)
+      end
+
+      updated_task = Repo.one(Task)
+
+      assert updated_task.id == task.id
+      assert updated_task.title == task.title
+      assert updated_task.markdown == task.markdown
+      assert updated_task.body == task.body
+      assert updated_task.github_issue_number == task.github_issue_number
+      assert updated_task.github_repo_id == task.github_repo_id
+
+      assert_received({:patch, "https://api.github.com/repos/foo/bar/issues/5", _headers, _body, _options})
+    end
+  end
 end
